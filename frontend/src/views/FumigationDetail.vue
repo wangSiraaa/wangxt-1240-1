@@ -102,33 +102,6 @@ const planId = computed(() => route.params.id as string)
 const detail = ref<FumigationPlan>()
 const executions = ref<FumigationExecution[]>([])
 
-const mockDetail: FumigationPlan = {
-  id: planId.value,
-  plan_no: 'FM20241215100003',
-  plan_title: '一号仓虫害熏蒸',
-  granary_id: '10000000-0000-0000-0000-000000000001',
-  creator_id: '00000000-0000-0000-0000-000000000002',
-  granary: { name: '一号仓', code: 'A-01' } as any,
-  chemical_type: '磷化铝',
-  chemical_name: '56%磷化铝片剂',
-  dosage: 180,
-  dosage_unit: 'kg',
-  target_concentration: 300,
-  expected_seal_hours: 168,
-  reason: '冬季常规防虫处理，发现少量赤拟谷盗',
-  people_cleared: true,
-  people_cleared_time: '2024-12-15T11:30:00Z',
-  status: 'completed',
-  creator: { full_name: '张保管员' } as any,
-  approver: { full_name: '李安全员' } as any,
-  approval_remark: '方案合理，同意执行，注意做好防护',
-  approved_at: '2024-12-15T14:00:00Z',
-  plan_start_time: '2024-12-15T15:00:00Z',
-  plan_end_time: '2024-12-15T18:00:00Z',
-  created_at: '2024-12-15T10:00:00Z',
-  updated_at: '2024-12-22T10:00:00Z'
-} as FumigationPlan
-
 const stepIndex = computed(() => {
   if (!detail.value) return 0
   const s = detail.value.status
@@ -151,7 +124,6 @@ const loadDetail = async () => {
   try {
     detail.value = await fumigationApi.getPlan(planId.value)
   } catch {
-    detail.value = mockDetail
   }
 }
 
@@ -159,20 +131,7 @@ const loadExecutions = async () => {
   try {
     executions.value = await fumigationApi.listExecutions({ plan_id: planId.value })
   } catch {
-    executions.value = [
-      {
-        id: 'ex1',
-        plan_id: planId.value,
-        granary_id: 'g1',
-        operator_id: 'u1',
-        actual_start_time: '2024-12-15T15:00:00Z',
-        actual_end_time: '2024-12-15T17:30:00Z',
-        chemical_actual_dosage: 176.5,
-        weather_during: '晴',
-        remark: '投药顺利，按区域分布施药',
-        created_at: '2024-12-15T15:00:00Z'
-      }
-    ] as FumigationExecution[]
+    executions.value = []
   }
 }
 

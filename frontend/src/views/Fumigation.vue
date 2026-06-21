@@ -259,44 +259,6 @@ const completeDialogVisible = ref(false)
 const completing = ref(false)
 const completeForm = reactive({ actual_dosage: 0, weather_during: '', remark: '' })
 
-const mockPlans: FumigationPlan[] = [
-  {
-    id: '1', plan_no: 'FM20241220120001', plan_title: '二号仓冬季常规熏蒸',
-    granary_id: '10000000-0000-0000-0000-000000000002',
-    creator_id: '00000000-0000-0000-0000-000000000002',
-    granary: { name: '二号仓', code: 'A-02' } as any,
-    chemical_name: '磷化铝', dosage: 150, dosage_unit: 'kg', target_concentration: 300,
-    expected_seal_hours: 168, reason: '发现少量玉米象虫害',
-    people_cleared: true, status: 'in_progress',
-    creator: { full_name: '张保管员' } as any,
-    created_at: '2024-12-20T10:00:00Z',
-    updated_at: '2024-12-20T10:00:00Z'
-  } as FumigationPlan,
-  {
-    id: '2', plan_no: 'FM20241219150002', plan_title: '三号仓预防性熏蒸',
-    granary_id: '10000000-0000-0000-0000-000000000003',
-    creator_id: '00000000-0000-0000-0000-000000000002',
-    granary: { name: '三号仓', code: 'B-01' } as any,
-    chemical_name: '磷化铝', dosage: 120, dosage_unit: 'kg',
-    people_cleared: false, status: 'pending_approval',
-    creator: { full_name: '张保管员' } as any,
-    created_at: '2024-12-19T15:00:00Z',
-    updated_at: '2024-12-19T15:00:00Z'
-  } as FumigationPlan,
-  {
-    id: '3', plan_no: 'FM20241215100003', plan_title: '一号仓虫害熏蒸',
-    granary_id: '10000000-0000-0000-0000-000000000001',
-    creator_id: '00000000-0000-0000-0000-000000000002',
-    granary: { name: '一号仓', code: 'A-01' } as any,
-    chemical_name: '磷化铝', dosage: 180, dosage_unit: 'kg',
-    people_cleared: true, status: 'completed',
-    creator: { full_name: '张保管员' } as any,
-    approver: { full_name: '李安全员' } as any,
-    created_at: '2024-12-15T10:00:00Z',
-    updated_at: '2024-12-20T10:00:00Z'
-  } as FumigationPlan
-]
-
 const loadList = async () => {
   loading.value = true
   try {
@@ -306,11 +268,7 @@ const loadList = async () => {
     })
     list.value = data
   } catch {
-    list.value = mockPlans.filter(p => {
-      if (filters.status && p.status !== filters.status) return false
-      if (filters.granary_id && p.granary_id !== filters.granary_id) return false
-      return true
-    })
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -320,11 +278,7 @@ const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = [
-      { id: '10000000-0000-0000-0000-000000000001', code: 'A-01', name: '一号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000002', code: 'A-02', name: '二号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000003', code: 'B-01', name: '三号仓' } as any
-    ]
+    granaries.value = []
   }
 }
 
@@ -351,9 +305,6 @@ const handleCreate = async () => {
     createDialogVisible.value = false
     loadList()
   } catch {
-    ElMessage.success('创建成功')
-    createDialogVisible.value = false
-    loadList()
   } finally {
     creating.value = false
   }
@@ -362,12 +313,15 @@ const handleCreate = async () => {
 const submitApproval = async (row: FumigationPlan) => {
   try {
     await ElMessageBox.confirm('确定提交该方案审批吗？', '提示', { type: 'warning' })
-    try {
-      await fumigationApi.submitPlan(row.id)
-    } catch {}
+  } catch {
+    return
+  }
+  try {
+    await fumigationApi.submitPlan(row.id)
     ElMessage.success('已提交审批')
     loadList()
-  } catch {}
+  } catch {
+  }
 }
 
 const openApproveDialog = (row: FumigationPlan, isPass: boolean) => {
@@ -381,12 +335,10 @@ const handleApprove = async () => {
   if (!currentPlan.value) return
   approving.value = true
   try {
-    try {
-      await fumigationApi.approvePlan(currentPlan.value.id, {
-        approved: approveIsPass.value,
-        approval_remark: approvalRemark.value
-      })
-    } catch {}
+    await fumigationApi.approvePlan(currentPlan.value.id, {
+      approved: approveIsPass.value,
+      approval_remark: approvalRemark.value
+    })
     ElMessage.success(approveIsPass.value ? '审批通过' : '已驳回')
     approveDialogVisible.value = false
     loadList()
@@ -403,12 +355,15 @@ const markPeopleCleared = async (row: FumigationPlan) => {
       '确认人员清场',
       { type: 'warning', confirmButtonText: '确认已清场', cancelButtonText: '取消' }
     )
-    try {
-      await fumigationApi.clearPeople(row.id, { cleared: true })
-    } catch {}
+  } catch {
+    return
+  }
+  try {
+    await fumigationApi.clearPeople(row.id, { cleared: true })
     ElMessage.success('已确认人员清场，可开始投药')
     loadList()
-  } catch {}
+  } catch {
+  }
 }
 
 const startExecution = async (row: FumigationPlan) => {
@@ -418,15 +373,15 @@ const startExecution = async (row: FumigationPlan) => {
       '开始熏蒸',
       { type: 'error', confirmButtonText: '确认投药', cancelButtonText: '取消' }
     )
-    try {
-      await fumigationApi.startExecution(row.id)
-      ElMessage.success('熏蒸已开始执行')
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || '开始执行成功'
-      ElMessage.success(msg)
-    }
+  } catch {
+    return
+  }
+  try {
+    await fumigationApi.startExecution(row.id)
+    ElMessage.success('熏蒸已开始执行')
     loadList()
-  } catch {}
+  } catch {
+  }
 }
 
 const openCompleteDialog = (row: FumigationPlan) => {
@@ -439,9 +394,7 @@ const handleComplete = async () => {
   if (!currentPlan.value) return
   completing.value = true
   try {
-    try {
-      await fumigationApi.completeExecution(currentPlan.value.id, completeForm)
-    } catch {}
+    await fumigationApi.completeExecution(currentPlan.value.id, completeForm)
     ElMessage.success('熏蒸完成，仓房已密封，建议按规程通风后解封')
     completeDialogVisible.value = false
     loadList()

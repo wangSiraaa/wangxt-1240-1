@@ -378,7 +378,7 @@ func (fc *FumigationController) ListExecutions(c *gin.Context) {
 	planID := c.Query("plan_id")
 	granaryID := c.Query("granary_id")
 
-	db := database.DB.Preload("Plan")
+	db := database.DB.Preload("Plan").Preload("Granary").Preload("Operator")
 
 	if planID != "" {
 		db = db.Where("plan_id = ?", planID)

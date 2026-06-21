@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -174,7 +175,7 @@ func (uc *UnsealController) ListGasDetections(c *gin.Context) {
 	granaryID := c.Query("granary_id")
 	unsealID := c.Query("unseal_id")
 
-	db := database.DB.Preload("Detector")
+	db := database.DB.Preload("Granary").Preload("Detector").Preload("Unseal")
 
 	if granaryID != "" {
 		db = db.Where("granary_id = ?", granaryID)
@@ -294,5 +295,5 @@ func (uc *UnsealController) CompleteUnseal(c *gin.Context) {
 }
 
 func formatFloat(f float64) string {
-	return string(rune(int(f*100) / 100))
+	return fmt.Sprintf("%.4f", f)
 }

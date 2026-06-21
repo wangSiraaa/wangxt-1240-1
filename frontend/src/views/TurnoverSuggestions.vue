@@ -227,74 +227,6 @@ const processing = ref(false)
 const completeForm = reactive({ result: 'turned', process_note: '' })
 const currentProcessId = ref('')
 
-const mockList: TurnoverSuggestion[] = [
-  {
-    id: '1', suggestion_no: 'TS20241220120001',
-    granary_id: '10000000-0000-0000-0000-000000000002',
-    granary: { name: '二号仓', code: 'A-02' } as any,
-    priority: 'urgent', status: 'pending',
-    trigger_reasons: ['temp_too_high', 'insect_found'],
-    max_temp: 31.8, min_temp: 22.4, temp_diff: 9.4,
-    avg_humidity: 78.5,
-    anomaly_zones: [
-      { location: '北区上层', temperature: 31.8, description: '疑似玉米象虫害活跃区' },
-      { location: '西区中层', temperature: 29.6, description: '高温区' }
-    ],
-    suggestion_content: '',
-    suggestion_text:
-      '【紧急处置】最高温 31.8°C 超过 30°C 红线，同时检测到玉米象虫害。\n\n' +
-      '1. 立即通知保管员、安全员现场确认虫害范围；\n' +
-      '2. 启动紧急翻仓方案，优先翻倒北区上层高温暖区；\n' +
-      '3. 翻仓后建议立即申请熏蒸处置，防止虫害扩散；\n' +
-      '4. 同步检测西区中层区域粮温变化。',
-    created_at: '2024-12-20T12:00:00Z',
-    updated_at: '2024-12-20T12:00:00Z'
-  } as TurnoverSuggestion,
-  {
-    id: '2', suggestion_no: 'TS20241221100002',
-    granary_id: '10000000-0000-0000-0000-000000000003',
-    granary: { name: '三号仓', code: 'B-01' } as any,
-    priority: 'high', status: 'in_progress',
-    trigger_reasons: ['temp_diff_large'],
-    max_temp: 26.5, min_temp: 20.1, temp_diff: 6.4,
-    avg_humidity: 72.0,
-    anomaly_zones: [
-      { location: '南区中层', temperature: 26.5, description: '散热不良区' }
-    ],
-    suggestion_content: '',
-    suggestion_text:
-      '【重点处置】最高温 26.5°C，上下温差 6.4°C 超过 5°C 预警线。\n\n' +
-      '1. 安排翻仓作业，优先处理南区中层区域；\n' +
-      '2. 翻仓时配合轴流风机强制通风降温；\n' +
-      '3. 翻仓完成后 24 小时内再次检测温差；\n' +
-      '4. 建议将此仓房列入重点监控名单，每日定时巡检。',
-    created_at: '2024-12-21T10:00:00Z',
-    updated_at: '2024-12-22T08:00:00Z',
-    process_note: '已开始翻仓作业，预计今日完成南区处理'
-  } as TurnoverSuggestion,
-  {
-    id: '3', suggestion_no: 'TS20241218100003',
-    granary_id: '10000000-0000-0000-0000-000000000001',
-    granary: { name: '一号仓', code: 'A-01' } as any,
-    priority: 'medium', status: 'resolved',
-    trigger_reasons: ['moisture_high'],
-    max_temp: 23.2, min_temp: 19.8, temp_diff: 3.4,
-    avg_humidity: 81.2,
-    anomaly_zones: [],
-    suggestion_content: '',
-    suggestion_text:
-      '【常规处置】平均湿度 81.2%，存在轻微霉变风险。\n\n' +
-      '1. 适当增加通风时间，降低仓内湿度；\n' +
-      '2. 每周定期翻仓一次，促进粮堆散热散湿；\n' +
-      '3. 关注天气变化，雨天及时关闭通风口。',
-    created_at: '2024-12-18T10:00:00Z',
-    updated_at: '2024-12-19T16:00:00Z',
-    processed_by: '张保管员',
-    processed_at: '2024-12-19T16:00:00Z',
-    process_note: '已完成通风和翻仓处理，湿度降至 72%，状态恢复正常。'
-  } as TurnoverSuggestion
-]
-
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'
 
 const loadList = async () => {
@@ -307,12 +239,7 @@ const loadList = async () => {
     })
     list.value = data
   } catch {
-    list.value = mockList.filter(s => {
-      if (filters.priority && s.priority !== filters.priority) return false
-      if (filters.status && s.status !== filters.status) return false
-      if (filters.granary_id && s.granary_id !== filters.granary_id) return false
-      return true
-    })
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -322,11 +249,7 @@ const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = [
-      { id: '10000000-0000-0000-0000-000000000001', code: 'A-01', name: '一号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000002', code: 'A-02', name: '二号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000003', code: 'B-01', name: '三号仓' } as any
-    ]
+    granaries.value = []
   }
 }
 
@@ -337,12 +260,11 @@ const viewDetail = (row: TurnoverSuggestion) => {
 
 const process = async (row: TurnoverSuggestion, status: SuggestionStatus) => {
   try {
-    try {
-      await suggestionApi.handle(row.id, { status })
-    } catch {}
+    await suggestionApi.handle(row.id, { status })
     ElMessage.success('已开始处理')
     loadList()
-  } catch {}
+  } catch {
+  }
 }
 
 const openCompleteDialog = (row: TurnoverSuggestion) => {
@@ -355,15 +277,14 @@ const openCompleteDialog = (row: TurnoverSuggestion) => {
 const handleComplete = async () => {
   processing.value = true
   try {
-    try {
-      await suggestionApi.handle(currentProcessId.value, {
-        status: 'resolved',
-        handle_remark: `[${completeForm.result}] ${completeForm.process_note}`
-      })
-    } catch {}
+    await suggestionApi.handle(currentProcessId.value, {
+      status: 'resolved',
+      handle_remark: `[${completeForm.result}] ${completeForm.process_note}`
+    })
     ElMessage.success('处理完成，状态已更新')
     completeDialogVisible.value = false
     loadList()
+  } catch {
   } finally {
     processing.value = false
   }

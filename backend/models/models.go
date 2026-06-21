@@ -150,17 +150,20 @@ type FumigationPlan struct {
 }
 
 type FumigationExecution struct {
-	ID                  uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
-	PlanID              uuid.UUID `gorm:"type:uuid;not null" json:"plan_id"`
-	GranaryID           uuid.UUID `gorm:"type:uuid;not null" json:"granary_id"`
-	OperatorID          uuid.UUID `gorm:"type:uuid;not null" json:"operator_id"`
-	ActualStartTime     *time.Time `json:"actual_start_time"`
-	ActualEndTime       *time.Time `json:"actual_end_time"`
-	ChemicalActualDosage float64   `gorm:"type:decimal(10,2)" json:"chemical_actual_dosage"`
-	ConcentrationReadings string    `gorm:"type:jsonb" json:"concentration_readings"`
-	WeatherDuring       string     `gorm:"size:100" json:"weather_during"`
-	Remark              string     `gorm:"type:text" json:"remark"`
-	CreatedAt           time.Time  `json:"created_at"`
+	ID                  uuid.UUID          `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	PlanID              uuid.UUID          `gorm:"type:uuid;not null" json:"plan_id"`
+	Plan                *FumigationPlan    `gorm:"foreignKey:PlanID" json:"plan,omitempty"`
+	GranaryID           uuid.UUID          `gorm:"type:uuid;not null" json:"granary_id"`
+	Granary             *Granary           `gorm:"foreignKey:GranaryID" json:"granary,omitempty"`
+	OperatorID          uuid.UUID          `gorm:"type:uuid;not null" json:"operator_id"`
+	Operator            *User              `gorm:"foreignKey:OperatorID" json:"operator,omitempty"`
+	ActualStartTime     *time.Time         `json:"actual_start_time"`
+	ActualEndTime       *time.Time         `json:"actual_end_time"`
+	ChemicalActualDosage float64            `gorm:"type:decimal(10,2)" json:"chemical_actual_dosage"`
+	ConcentrationReadings string           `gorm:"type:jsonb" json:"concentration_readings"`
+	WeatherDuring       string             `gorm:"size:100" json:"weather_during"`
+	Remark              string             `gorm:"type:text" json:"remark"`
+	CreatedAt           time.Time          `json:"created_at"`
 }
 
 type UnsealType string
@@ -171,33 +174,38 @@ const (
 )
 
 type UnsealRecord struct {
-	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
-	GranaryID         uuid.UUID  `gorm:"type:uuid;not null" json:"granary_id"`
-	FumigationPlanID  *uuid.UUID `gorm:"type:uuid" json:"fumigation_plan_id"`
-	RecorderID        uuid.UUID  `gorm:"type:uuid;not null" json:"recorder_id"`
-	UnsealType        UnsealType `gorm:"size:20;not null" json:"unseal_type"`
-	StartTime         *time.Time `json:"start_time"`
-	EndTime           *time.Time `json:"end_time"`
-	WeatherCondition  string     `gorm:"size:100" json:"weather_condition"`
-	IsSafe            bool       `gorm:"default:false" json:"is_safe"`
-	FinalGasReadings  string     `gorm:"type:jsonb" json:"final_gas_readings"`
-	Remark            string     `gorm:"type:text" json:"remark"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                uuid.UUID   `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	GranaryID         uuid.UUID   `gorm:"type:uuid;not null" json:"granary_id"`
+	Granary           *Granary    `gorm:"foreignKey:GranaryID" json:"granary,omitempty"`
+	FumigationPlanID  *uuid.UUID  `gorm:"type:uuid" json:"fumigation_plan_id"`
+	RecorderID        uuid.UUID   `gorm:"type:uuid;not null" json:"recorder_id"`
+	Recorder          *User       `gorm:"foreignKey:RecorderID" json:"recorder,omitempty"`
+	UnsealType        UnsealType  `gorm:"size:20;not null" json:"unseal_type"`
+	StartTime         *time.Time  `json:"start_time"`
+	EndTime           *time.Time  `json:"end_time"`
+	WeatherCondition  string      `gorm:"size:100" json:"weather_condition"`
+	IsSafe            bool        `gorm:"default:false" json:"is_safe"`
+	FinalGasReadings  string      `gorm:"type:jsonb" json:"final_gas_readings"`
+	Remark            string      `gorm:"type:text" json:"remark"`
+	CreatedAt         time.Time   `json:"created_at"`
 }
 
 type GasDetectionRecord struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
-	GranaryID       uuid.UUID  `gorm:"type:uuid;not null" json:"granary_id"`
-	UnsealID        *uuid.UUID `gorm:"type:uuid" json:"unseal_id"`
-	DetectorID      uuid.UUID  `gorm:"type:uuid;not null" json:"detector_id"`
-	DetectionTime   time.Time  `gorm:"not null" json:"detection_time"`
-	GasType         string     `gorm:"size:30;not null" json:"gas_type"`
-	Concentration   float64    `gorm:"type:decimal(10,4);not null" json:"concentration"`
-	SafeLimit       float64    `gorm:"type:decimal(10,4);not null" json:"safe_limit"`
-	IsSafe          bool       `gorm:"default:false" json:"is_safe"`
-	DetectionPoints string     `gorm:"type:jsonb" json:"detection_points"`
-	Remark          string     `gorm:"type:text" json:"remark"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	GranaryID       uuid.UUID       `gorm:"type:uuid;not null" json:"granary_id"`
+	Granary         *Granary        `gorm:"foreignKey:GranaryID" json:"granary,omitempty"`
+	UnsealID        *uuid.UUID      `gorm:"type:uuid" json:"unseal_id"`
+	Unseal          *UnsealRecord   `gorm:"foreignKey:UnsealID" json:"unseal,omitempty"`
+	DetectorID      uuid.UUID       `gorm:"type:uuid;not null" json:"detector_id"`
+	Detector        *User           `gorm:"foreignKey:DetectorID" json:"detector,omitempty"`
+	DetectionTime   time.Time       `gorm:"not null" json:"detection_time"`
+	GasType         string          `gorm:"size:30;not null" json:"gas_type"`
+	Concentration   float64         `gorm:"type:decimal(10,4);not null" json:"concentration"`
+	SafeLimit       float64         `gorm:"type:decimal(10,4);not null" json:"safe_limit"`
+	IsSafe          bool            `gorm:"default:false" json:"is_safe"`
+	DetectionPoints string          `gorm:"type:jsonb" json:"detection_points"`
+	Remark          string          `gorm:"type:text" json:"remark"`
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 type SuggestionPriority string
@@ -219,22 +227,23 @@ const (
 )
 
 type GrainTurnoverSuggestion struct {
-	ID               uuid.UUID          `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
-	GranaryID        uuid.UUID          `gorm:"type:uuid;not null" json:"granary_id"`
-	Granary          *Granary           `gorm:"foreignKey:GranaryID" json:"granary,omitempty"`
-	SourceRecordID   *uuid.UUID         `gorm:"type:uuid" json:"source_record_id"`
-	SuggestionNo     string             `gorm:"size:50;unique" json:"suggestion_no"`
-	AbnormalAreaDesc string             `gorm:"type:text" json:"abnormal_area_desc"`
-	TemperatureAnomaly string           `gorm:"type:jsonb" json:"temperature_anomaly"`
-	SuggestionContent string            `gorm:"type:text;not null" json:"suggestion_content"`
-	Priority         SuggestionPriority `gorm:"size:20;default:'normal'" json:"priority"`
-	Status           SuggestionStatus   `gorm:"size:20;default:'pending'" json:"status"`
-	HandlerID        *uuid.UUID         `gorm:"type:uuid" json:"handler_id"`
-	Handler          *User              `gorm:"foreignKey:HandlerID" json:"handler,omitempty"`
-	HandledAt        *time.Time         `json:"handled_at"`
-	HandleRemark     string             `gorm:"type:text" json:"handle_remark"`
-	CreatedAt        time.Time          `json:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	ID               uuid.UUID              `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	GranaryID        uuid.UUID              `gorm:"type:uuid;not null" json:"granary_id"`
+	Granary          *Granary               `gorm:"foreignKey:GranaryID" json:"granary,omitempty"`
+	SourceRecordID   *uuid.UUID             `gorm:"type:uuid" json:"source_record_id"`
+	SourceRecord     *GrainConditionRecord  `gorm:"foreignKey:SourceRecordID" json:"source_record,omitempty"`
+	SuggestionNo     string                 `gorm:"size:50;unique" json:"suggestion_no"`
+	AbnormalAreaDesc string                 `gorm:"type:text" json:"abnormal_area_desc"`
+	TemperatureAnomaly string               `gorm:"type:jsonb" json:"temperature_anomaly"`
+	SuggestionContent string                 `gorm:"type:text;not null" json:"suggestion_content"`
+	Priority         SuggestionPriority     `gorm:"size:20;default:'normal'" json:"priority"`
+	Status           SuggestionStatus       `gorm:"size:20;default:'pending'" json:"status"`
+	HandlerID        *uuid.UUID             `gorm:"type:uuid" json:"handler_id"`
+	Handler          *User                  `gorm:"foreignKey:HandlerID" json:"handler,omitempty"`
+	HandledAt        *time.Time             `json:"handled_at"`
+	HandleRemark     string                 `gorm:"type:text" json:"handle_remark"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 type OperationLog struct {

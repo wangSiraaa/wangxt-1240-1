@@ -191,17 +191,17 @@ import {
   WarningFilled,
   List
 } from '@element-plus/icons-vue'
-import type { DashboardStats, FumigationPlan, GrainTurnoverSuggestion } from '@/types'
+import type { DashboardStats, FumigationPlan, GrainTurnoverSuggestion, GrainConditionRecord } from '@/types'
 import { FumigationStatusLabels, FumigationStatusColors, PriorityLabels, PriorityColors } from '@/types'
-import { dashboardApi, fumigationApi, suggestionApi } from '@/api'
+import { dashboardApi, fumigationApi, suggestionApi, grainConditionApi } from '@/api'
 import dayjs from 'dayjs'
 
 const stats = ref<DashboardStats>({
-  total_granaries: 3,
-  normal_granaries: 2,
+  total_granaries: 0,
+  normal_granaries: 0,
   fumigating_granaries: 0,
   ventilating_granaries: 0,
-  sealed_granaries: 1,
+  sealed_granaries: 0,
   abnormal_granaries: 0,
   pending_suggestions: 0,
   processing_suggestions: 0,
@@ -215,6 +215,8 @@ const stats = ref<DashboardStats>({
   abnormal_temp_count: 0
 })
 
+const tempRecords = ref<GrainConditionRecord[]>([])
+
 const fumigationList = ref<FumigationPlan[]>([])
 const urgentSuggestions = ref<GrainTurnoverSuggestion[]>([])
 
@@ -222,24 +224,6 @@ const loadData = async () => {
   try {
     stats.value = await dashboardApi.getStats()
   } catch {
-    stats.value = {
-      total_granaries: 3,
-      normal_granaries: 2,
-      fumigating_granaries: 0,
-      ventilating_granaries: 0,
-      sealed_granaries: 1,
-      abnormal_granaries: 0,
-      pending_suggestions: 2,
-      processing_suggestions: 1,
-      urgent_suggestions: 1,
-      high_suggestions: 1,
-      pending_fumigation: 1,
-      in_progress_fumigation: 0,
-      today_records: 5,
-      today_avg_temp: 18.5,
-      today_max_temp: 26.2,
-      abnormal_temp_count: 3
-    }
   }
   try {
     const data = await fumigationApi.listPlans()
@@ -251,20 +235,14 @@ const loadData = async () => {
     const data = await suggestionApi.list({ status: 'pending' })
     urgentSuggestions.value = data.filter(s => s.priority === 'urgent' || s.priority === 'high')
   } catch {
-    urgentSuggestions.value = [
-      {
-        id: '1',
-        granary_id: '10000000-0000-0000-0000-000000000001',
-        granary: { name: '一号仓', code: 'A-01' } as any,
-        suggestion_no: 'TC20241220120001',
-        abnormal_area_desc: '最高温度 28.5°C 超过预警阈值；温差 6.2°C 超过阈值',
-        suggestion_content: '建议翻仓处理',
-        priority: 'urgent',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      } as any
-    ]
+    urgentSuggestions.value = []
+  }
+  try {
+    const startDate = dayjs().subtract(6, 'day').format('YYYY-MM-DD')
+    const endDate = dayjs().add(1, 'day').format('YYYY-MM-DD')
+    tempRecords.value = await grainConditionApi.list({ start_date: startDate, end_date: endDate })
+  } catch {
+    tempRecords.value = []
   }
 }
 
@@ -292,18 +270,31 @@ const statusChartOption = computed(() => ({
 }))
 
 const tempTrendOption = computed(() => {
-  const days = []
-  const avgTemps = []
-  const maxTemps = []
-  const minTemps = []
+  const days: string[] = []
+  const avgTemps: (number | null)[] = []
+  const maxTemps: (number | null)[] = []
+  const minTemps: (number | null)[] = []
+
   for (let i = 6; i >= 0; i--) {
     const d = dayjs().subtract(i, 'day')
+    const dayStr = d.format('YYYY-MM-DD')
     days.push(d.format('MM-DD'))
-    const base = 15 + Math.random() * 5
-    avgTemps.push(Number(base.toFixed(1)))
-    maxTemps.push(Number((base + 3 + Math.random() * 4).toFixed(1)))
-    minTemps.push(Number((base - 3 - Math.random() * 2).toFixed(1)))
+
+    const dayRecords = tempRecords.value.filter(r => dayjs(r.record_time).format('YYYY-MM-DD') === dayStr)
+    if (dayRecords.length === 0) {
+      avgTemps.push(null)
+      maxTemps.push(null)
+      minTemps.push(null)
+    } else {
+      const avg = dayRecords.reduce((s, r) => s + (r.avg_temperature || 0), 0) / dayRecords.length
+      const max = Math.max(...dayRecords.map(r => r.max_temperature || 0))
+      const min = Math.min(...dayRecords.map(r => r.min_temperature || 0))
+      avgTemps.push(Number(avg.toFixed(1)))
+      maxTemps.push(Number(max.toFixed(1)))
+      minTemps.push(Number(min.toFixed(1)))
+    }
   }
+
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: ['平均温度', '最高温度', '最低温度'] },
@@ -311,24 +302,32 @@ const tempTrendOption = computed(() => {
     xAxis: { type: 'category', boundaryGap: false, data: days },
     yAxis: { type: 'value', name: '温度(°C)' },
     series: [
-      { name: '平均温度', type: 'line', smooth: true, data: avgTemps, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#409eff' } },
-      { name: '最高温度', type: 'line', smooth: true, data: maxTemps, itemStyle: { color: '#f56c6c' } },
-      { name: '最低温度', type: 'line', smooth: true, data: minTemps, itemStyle: { color: '#67c23a' } }
+      { name: '平均温度', type: 'line', smooth: true, data: avgTemps, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#409eff' }, connectNulls: true },
+      { name: '最高温度', type: 'line', smooth: true, data: maxTemps, itemStyle: { color: '#f56c6c' }, connectNulls: true },
+      { name: '最低温度', type: 'line', smooth: true, data: minTemps, itemStyle: { color: '#67c23a' }, connectNulls: true }
     ]
   }
 })
 
 const suggestionChartOption = computed(() => ({
   tooltip: { trigger: 'axis' },
-  legend: { data: ['待处理', '处理中', '已完成', '已忽略'] },
+  legend: { data: ['数量'] },
   grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-  xAxis: { type: 'category', data: ['紧急', '高', '普通', '低'] },
+  xAxis: { type: 'category', data: ['紧急建议', '高优先级', '待处理', '处理中'] },
   yAxis: { type: 'value', name: '数量' },
   series: [
-    { name: '待处理', type: 'bar', stack: 'total', data: [stats.value.urgent_suggestions, stats.value.high_suggestions, stats.value.pending_suggestions, 0], itemStyle: { color: '#f56c6c' } },
-    { name: '处理中', type: 'bar', stack: 'total', data: [0, 0, stats.value.processing_suggestions, 0], itemStyle: { color: '#e6a23c' } },
-    { name: '已完成', type: 'bar', stack: 'total', data: [0, 0, 1, 2], itemStyle: { color: '#67c23a' } },
-    { name: '已忽略', type: 'bar', stack: 'total', data: [0, 0, 0, 1], itemStyle: { color: '#909399' } }
+    {
+      name: '数量',
+      type: 'bar',
+      barWidth: '50%',
+      data: [
+        { value: stats.value.urgent_suggestions, itemStyle: { color: '#f56c6c' } },
+        { value: stats.value.high_suggestions, itemStyle: { color: '#e6a23c' } },
+        { value: stats.value.pending_suggestions, itemStyle: { color: '#409eff' } },
+        { value: stats.value.processing_suggestions, itemStyle: { color: '#67c23a' } }
+      ],
+      label: { show: true, position: 'top' }
+    }
   ]
 }))
 

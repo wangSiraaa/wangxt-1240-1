@@ -281,21 +281,6 @@ const safeStatusLabel = computed(() => {
   return ''
 })
 
-const mockList: UnsealRecord[] = [
-  {
-    id: '1', granary_id: 'g1', unseal_type: 'ventilation',
-    recorder_id: 'u4',
-    granary: { name: '一号仓' } as any,
-    start_time: '2024-12-22T08:00:00Z',
-    end_time: '2024-12-22T16:00:00Z',
-    weather_condition: '晴',
-    is_safe: true,
-    fumigation_plan_id: 'FM20241215100003',
-    remark: '通风效果良好',
-    created_at: '2024-12-22T08:00:00Z'
-  }
-]
-
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'
 
 const loadList = async () => {
@@ -304,7 +289,7 @@ const loadList = async () => {
     const data = await unsealApi.list({ type: filters.type || undefined, granary_id: filters.granary_id || undefined })
     list.value = data
   } catch {
-    list.value = mockList
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -314,11 +299,7 @@ const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = [
-      { id: '10000000-0000-0000-0000-000000000001', code: 'A-01', name: '一号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000002', code: 'A-02', name: '二号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000003', code: 'B-01', name: '三号仓' } as any
-    ]
+    granaries.value = []
   }
 }
 
@@ -357,12 +338,11 @@ const handleCreate = async () => {
   if (!valid) return
   creating.value = true
   try {
-    try {
-      await unsealApi.create(createForm)
-    } catch {}
+    await unsealApi.create(createForm)
     ElMessage.success('登记成功')
     createDialogVisible.value = false
     loadList()
+  } catch {
   } finally {
     creating.value = false
   }
@@ -381,20 +361,11 @@ const handleComplete = async () => {
   if (!completeUnsealRow.value) return
   completing.value = true
   try {
-    try {
-      await unsealApi.complete(completeUnsealRow.value.id, completeForm)
-      ElMessage.success('登记完成')
-    } catch (e: any) {
-      const msg = e?.response?.data?.error
-      if (msg) {
-        ElMessage.error(msg)
-        completing.value = false
-        return
-      }
-      ElMessage.success('登记完成')
-    }
+    await unsealApi.complete(completeUnsealRow.value.id, completeForm)
+    ElMessage.success('登记完成')
     completeDialogVisible.value = false
     loadList()
+  } catch {
   } finally {
     completing.value = false
   }
@@ -417,12 +388,11 @@ const handleGasDetection = async () => {
   try {
     const body: any = { ...gasForm }
     if (!body.unseal_id) delete body.unseal_id
-    try {
-      await unsealApi.addGasDetection(gasGranaryId.value, body)
-    } catch {}
+    await unsealApi.addGasDetection(gasGranaryId.value, body)
     const safe = gasForm.concentration <= gasForm.safe_limit
     ElMessage.success(`气体检测登记完成，浓度${gasForm.concentration} ppm，${safe ? '已达标' : '未达标'}，安全限值 ${gasForm.safe_limit} ppm`)
     gasDialogVisible.value = false
+  } catch {
   } finally {
     gasSubmitting.value = false
   }

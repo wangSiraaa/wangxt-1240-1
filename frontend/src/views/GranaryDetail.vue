@@ -177,32 +177,10 @@ const GranaryStatusLabelsRef = GranaryStatusLabels
 const GranaryStatusColorsRef = GranaryStatusColors
 const SensorTypeLabelsRef = SensorTypeLabels
 
-const mockGranary: Granary = {
-  id: granaryId.value,
-  code: 'A-01',
-  name: '一号仓',
-  location: '东区A栋1层',
-  capacity: 5000,
-  grain_type: '小麦',
-  grain_variety: '冬小麦',
-  grain_weight: 4800,
-  status: 'normal',
-  keeper: { full_name: '张保管员' } as any,
-  created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z',
-  sensors: [
-    { id: '1', code: 'A01-T01', type: 'temperature', location_desc: '上层-东北', position_x: 2, position_y: 2, position_z: 4.5, unit: '°C', is_active: true, granary_id: granaryId.value, created_at: '' },
-    { id: '2', code: 'A01-T02', type: 'temperature', location_desc: '中层-中心', position_x: 5, position_y: 5, position_z: 3, unit: '°C', is_active: true, granary_id: granaryId.value, created_at: '' },
-    { id: '3', code: 'A01-T03', type: 'temperature', location_desc: '下层-西南', position_x: 8, position_y: 8, position_z: 1, unit: '°C', is_active: true, granary_id: granaryId.value, created_at: '' },
-    { id: '4', code: 'A01-H01', type: 'humidity', location_desc: '上层', position_x: 5, position_y: 5, position_z: 4.5, unit: '%RH', is_active: true, granary_id: granaryId.value, created_at: '' }
-  ]
-}
-
 const loadDetail = async () => {
   try {
     detail.value = await granaryApi.get(granaryId.value)
   } catch {
-    detail.value = mockGranary
   }
 }
 
@@ -210,7 +188,7 @@ const loadSensors = async () => {
   try {
     sensors.value = await granaryApi.getSensors(granaryId.value)
   } catch {
-    sensors.value = mockGranary.sensors || []
+    sensors.value = []
   }
 }
 
@@ -220,22 +198,6 @@ const loadRecords = async () => {
     conditionRecords.value = data.slice(0, 5)
   } catch {
     conditionRecords.value = []
-    for (let i = 0; i < 5; i++) {
-      const base = 18 + Math.random() * 6
-      conditionRecords.value.push({
-        id: String(i),
-        granary_id: granaryId.value,
-        recorder_id: '',
-        record_time: dayjs().subtract(i, 'day').format('YYYY-MM-DD HH:mm:ss'),
-        avg_temperature: Number(base.toFixed(1)),
-        max_temperature: Number((base + 4 + Math.random() * 3).toFixed(1)),
-        min_temperature: Number((base - 3 - Math.random() * 2).toFixed(1)),
-        avg_humidity: Number((60 + Math.random() * 15).toFixed(1)),
-        pest_found: i === 1,
-        mold_found: false,
-        created_at: ''
-      })
-    }
   }
 }
 
@@ -244,23 +206,6 @@ const loadReadings = async () => {
     readings.value = await granaryApi.getReadings(granaryId.value, { type: sensorType.value, limit: 500 })
   } catch {
     readings.value = []
-    const temps = sensors.value.filter(s => s.type === sensorType.value)
-    if (temps.length === 0) return
-    for (let i = 0; i < 100; i++) {
-      const sensor = temps[i % temps.length]
-      readings.value.push({
-        id: i,
-        sensor_id: sensor.id,
-        granary_id: granaryId.value,
-        reading_time: dayjs().subtract(i * 10, 'minute').format(),
-        value: Number((15 + Math.random() * 12).toFixed(2)),
-        sensor_code: sensor.code,
-        sensor_type: sensor.type,
-        location_desc: sensor.location_desc,
-        unit: sensor.unit,
-        is_abnormal: Math.random() > 0.9
-      })
-    }
   }
 }
 
@@ -302,27 +247,56 @@ const tempChartOption = computed(() => {
 const heatmapOption = computed(() => {
   const xSize = 10
   const ySize = 8
-  const data: any[] = []
-  for (let y = 0; y < ySize; y++) {
-    for (let x = 0; x < xSize; x++) {
-      const temp = 15 + Math.random() * 15
-      data.push([x, y, Number(temp.toFixed(1))])
+
+  const sensorMap: Record<string, Sensor> = {}
+  for (const s of sensors.value) {
+    sensorMap[s.id] = s
+  }
+
+  const latestBySensor: Record<string, SensorReading> = {}
+  for (const r of readings.value) {
+    const existing = latestBySensor[r.sensor_id]
+    if (!existing || new Date(r.reading_time) > new Date(existing.reading_time)) {
+      latestBySensor[r.sensor_id] = r
     }
   }
+
+  const data: any[] = []
+  let minVal = Infinity
+  let maxVal = -Infinity
+  for (const [sensorId, reading] of Object.entries(latestBySensor)) {
+    const sensor = sensorMap[sensorId]
+    if (!sensor) continue
+    const px = sensor.position_x ?? 0
+    const py = sensor.position_y ?? 0
+    const x = Math.max(0, Math.min(xSize - 1, Math.round(px)))
+    const y = Math.max(0, Math.min(ySize - 1, Math.round(py)))
+    data.push([x, y, Number(reading.value.toFixed(1))])
+    minVal = Math.min(minVal, reading.value)
+    maxVal = Math.max(maxVal, reading.value)
+  }
+
+  if (data.length === 0) {
+    minVal = 0
+    maxVal = 1
+  }
+
   return {
     tooltip: {
       position: 'top',
-      formatter: (p: any) => `位置(${p.data[0]}, ${p.data[1]})<br/>温度: <b>${p.data[2]} °C</b>`
+      formatter: (p: any) => `位置(${p.data[0]}, ${p.data[1]})<br/>${SensorTypeLabelsRef[sensorType.value]}: <b>${p.data[2]}</b>`
     },
     grid: { height: '60%', top: '10%' },
     xAxis: { type: 'category', data: Array.from({ length: xSize }, (_, i) => `X${i + 1}`), splitArea: { show: true } },
     yAxis: { type: 'category', data: Array.from({ length: ySize }, (_, i) => `Y${ySize - i}`), splitArea: { show: true } },
     visualMap: {
-      min: 10, max: 35, calculable: true, orient: 'horizontal', left: 'center', bottom: '5%',
+      min: Number.isFinite(minVal) ? Math.floor(minVal) : 0,
+      max: Number.isFinite(maxVal) ? Math.ceil(maxVal) : 1,
+      calculable: true, orient: 'horizontal', left: 'center', bottom: '5%',
       inRange: { color: ['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c'] }
     },
     series: [{
-      name: '温度分布',
+      name: SensorTypeLabelsRef[sensorType.value],
       type: 'heatmap',
       data,
       label: { show: true, fontSize: 10 },
@@ -343,9 +317,6 @@ const handleAddSensor = async () => {
     sensorDialogVisible.value = false
     loadSensors()
   } catch {
-    ElMessage.success('添加成功')
-    sensorDialogVisible.value = false
-    sensors.value.push({ ...sensorForm, id: Date.now().toString(), granary_id: granaryId.value, is_active: true, created_at: new Date().toISOString() })
   }
 }
 

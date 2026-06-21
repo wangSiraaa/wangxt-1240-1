@@ -52,7 +52,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock, WarningFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import type { UserRole } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -71,45 +70,17 @@ const rules: FormRules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
-const mockPasswordMap: Record<string, { password: string; role: UserRole; full_name: string; id: string }> = {
-  admin: { password: '123456', role: 'admin', full_name: '系统管理员', id: '00000000-0000-0000-0000-000000000001' },
-  keeper01: { password: '123456', role: 'keeper', full_name: '张保管员', id: '00000000-0000-0000-0000-000000000002' },
-  safety01: { password: '123456', role: 'safety_officer', full_name: '李安全员', id: '00000000-0000-0000-0000-000000000003' },
-  duty01: { password: '123456', role: 'duty_officer', full_name: '王值班员', id: '00000000-0000-0000-0000-000000000004' }
-}
-
 const handleLogin = async () => {
   const valid = await loginForm.value?.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
-    try {
-      await userStore.login(form.username, form.password)
-    } catch (e: any) {
-      if (mockPasswordMap[form.username] && mockPasswordMap[form.username].password === form.password) {
-        const mock = mockPasswordMap[form.username]
-        const mockUser = {
-          id: mock.id,
-          username: form.username,
-          full_name: mock.full_name,
-          role: mock.role,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-        userStore.token = 'mock-token-' + Date.now()
-        userStore.user = mockUser
-        localStorage.setItem('token', userStore.token)
-        localStorage.setItem('user', JSON.stringify(mockUser))
-      } else {
-        throw e
-      }
-    }
-
+    await userStore.login(form.username, form.password)
     ElMessage.success('登录成功')
     const redirect = route.query.redirect as string || '/dashboard'
     router.push(redirect)
-  } catch (e) {
+  } catch {
   } finally {
     loading.value = false
   }

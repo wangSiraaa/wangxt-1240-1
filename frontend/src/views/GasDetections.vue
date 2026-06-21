@@ -236,35 +236,6 @@ const currentSafeStatus = computed(() => {
   )
 })
 
-const mockList: GasDetectionRecord[] = [
-  {
-    id: '1', granary_id: 'g1', unseal_id: 'u1', detector_id: 'u4',
-    granary: { name: '一号仓' } as any,
-    detection_time: '2024-12-22T10:00:00Z',
-    gas_type: 'gas_ph3', concentration: 0.2, safe_limit: 0.3,
-    is_safe: true, violations: [],
-    detection_points: '中心,北侧,南侧,东侧,西侧',
-    readings: { gas_ph3: 0.2, gas_h2s: 0.5, co2: 800, o2: 208000 } as any,
-    remark: '首次通风后检测，指标正常',
-    created_at: '2024-12-22T10:00:00Z'
-  },
-  {
-    id: '2', granary_id: 'g1', unseal_id: 'u1', detector_id: 'u4',
-    granary: { name: '一号仓' } as any,
-    detection_time: '2024-12-22T08:00:00Z',
-    gas_type: 'gas_ph3', concentration: 2.5, safe_limit: 0.3,
-    is_safe: false,
-    violations: [
-      { gas_type: 'gas_ph3', actual: 2.5, limit: 0.3 },
-      { gas_type: 'co2', actual: 8500, limit: 5000 }
-    ],
-    detection_points: '中心,北侧,南侧,东侧,西侧',
-    readings: { gas_ph3: 2.5, gas_h2s: 3, co2: 8500, o2: 208000 } as any,
-    remark: '通风前检测，浓度较高',
-    created_at: '2024-12-22T08:00:00Z'
-  }
-]
-
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'
 
 watch(() => createForm.granary_id, () => loadUnsealList())
@@ -278,12 +249,7 @@ const loadList = async () => {
     })
     list.value = Array.isArray(resp) ? resp : (resp as any)?.records || resp || []
   } catch {
-    list.value = mockList.filter(r => {
-      if (filters.gas_type && r.gas_type !== filters.gas_type) return false
-      if (filters.granary_id && r.granary_id !== filters.granary_id) return false
-      if (filters.date && !r.detection_time?.startsWith(filters.date)) return false
-      return true
-    })
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -293,11 +259,7 @@ const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = [
-      { id: '10000000-0000-0000-0000-000000000001', code: 'A-01', name: '一号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000002', code: 'A-02', name: '二号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000003', code: 'B-01', name: '三号仓' } as any
-    ]
+    granaries.value = []
   }
 }
 
@@ -310,9 +272,7 @@ const loadUnsealList = async () => {
     const data = await unsealApi.list({ granary_id: createForm.granary_id })
     unsealList.value = data || []
   } catch {
-    unsealList.value = [
-      { id: 'u1', granary_id: createForm.granary_id, unseal_type: 'ventilation', start_time: '2024-12-22T08:00:00Z' }
-    ]
+    unsealList.value = []
   }
 }
 
@@ -343,9 +303,7 @@ const handleCreate = async () => {
       safe_limit: DefaultSafeLimits.gas_ph3,
       readings: r
     } as any
-    try {
-      await unsealApi.addGasDetection(createForm.granary_id, body)
-    } catch {}
+    await unsealApi.addGasDetection(createForm.granary_id, body)
     const safe = currentSafeStatus.value
     ElMessage.success(
       `气体检测登记完成！` +
@@ -353,6 +311,7 @@ const handleCreate = async () => {
     )
     createDialogVisible.value = false
     loadList()
+  } catch {
   } finally {
     creating.value = false
   }

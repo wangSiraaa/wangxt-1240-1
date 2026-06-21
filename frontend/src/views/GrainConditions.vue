@@ -193,27 +193,6 @@ const loadList = async () => {
     list.value = data
   } catch {
     list.value = []
-    for (let i = 0; i < 8; i++) {
-      const base = 16 + Math.random() * 8
-      list.value.push({
-        id: String(i),
-        granary_id: '10000000-0000-0000-0000-000000000001',
-        granary: { name: `一号仓`, code: 'A-01' } as any,
-        recorder_id: '2',
-        recorder: { full_name: '张保管员' } as any,
-        record_time: dayjs().subtract(i, 'day').add(i * 2, 'hour').format(),
-        avg_temperature: Number(base.toFixed(1)),
-        max_temperature: Number((base + 3 + Math.random() * 5).toFixed(1)),
-        min_temperature: Number((base - 3 - Math.random() * 2).toFixed(1)),
-        avg_humidity: Number((55 + Math.random() * 20).toFixed(1)),
-        grain_level: 4.5 + Math.random(),
-        pest_found: i === 2,
-        mold_found: i === 5,
-        abnormal_areas: i === 3 ? '区域A温度偏高' : '',
-        weather_condition: ['晴', '多云', '阴', '雨'][i % 4],
-        created_at: ''
-      })
-    }
   } finally {
     loading.value = false
   }
@@ -223,11 +202,7 @@ const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = [
-      { id: '10000000-0000-0000-0000-000000000001', code: 'A-01', name: '一号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000002', code: 'A-02', name: '二号仓' } as any,
-      { id: '10000000-0000-0000-0000-000000000003', code: 'B-01', name: '三号仓' } as any
-    ]
+    granaries.value = []
   }
 }
 
@@ -259,10 +234,7 @@ const handleCreate = async () => {
     ElMessage.success('录入成功，系统已自动检测是否需要生成翻仓建议')
     createDialogVisible.value = false
     loadList()
-  } catch (e: any) {
-    ElMessage.success('录入成功')
-    createDialogVisible.value = false
-    loadList()
+  } catch {
   } finally {
     submitting.value = false
   }

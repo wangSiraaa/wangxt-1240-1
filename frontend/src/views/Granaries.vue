@@ -205,51 +205,6 @@ const rules: FormRules = {
   name: [{ required: true, message: '请输入仓房名称', trigger: 'blur' }]
 }
 
-const mockGranaries: Granary[] = [
-  {
-    id: '10000000-0000-0000-0000-000000000001',
-    code: 'A-01',
-    name: '一号仓',
-    location: '东区A栋1层',
-    capacity: 5000,
-    grain_type: '小麦',
-    grain_variety: '冬小麦',
-    grain_weight: 4800,
-    status: 'normal',
-    keeper: { full_name: '张保管员' } as any,
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000002',
-    code: 'A-02',
-    name: '二号仓',
-    location: '东区A栋2层',
-    capacity: 6000,
-    grain_type: '玉米',
-    grain_variety: '',
-    grain_weight: 5500,
-    status: 'fumigating',
-    keeper: { full_name: '张保管员' } as any,
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '10000000-0000-0000-0000-000000000003',
-    code: 'B-01',
-    name: '三号仓',
-    location: '西区B栋1层',
-    capacity: 4500,
-    grain_type: '稻谷',
-    grain_variety: '',
-    grain_weight: 4200,
-    status: 'sealed',
-    keeper: { full_name: '张保管员' } as any,
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z'
-  }
-]
-
 const loadList = async () => {
   loading.value = true
   try {
@@ -259,14 +214,7 @@ const loadList = async () => {
     })
     list.value = data
   } catch {
-    list.value = mockGranaries.filter(g => {
-      if (filters.status && g.status !== filters.status) return false
-      if (filters.keyword) {
-        const k = filters.keyword.toLowerCase()
-        return g.code.toLowerCase().includes(k) || g.name.toLowerCase().includes(k) || (g.location?.toLowerCase().includes(k))
-      }
-      return true
-    })
+    list.value = []
   } finally {
     loading.value = false
   }
@@ -276,7 +224,7 @@ const loadKeepers = async () => {
   try {
     keepers.value = await granaryApi.listKeepers()
   } catch {
-    keepers.value = [{ id: '00000000-0000-0000-0000-000000000002', full_name: '张保管员', username: 'keeper01', role: 'keeper' } as User] as User[]
+    keepers.value = []
   }
 }
 
@@ -322,9 +270,6 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     loadList()
   } catch {
-    ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
-    dialogVisible.value = false
-    loadList()
   } finally {
     submitting.value = false
   }
@@ -333,12 +278,15 @@ const handleSubmit = async () => {
 const handleDelete = async (row: Granary) => {
   try {
     await ElMessageBox.confirm(`确定删除仓房 ${row.name} 吗？`, '提示', { type: 'warning' })
-    try {
-      await granaryApi.delete(row.id)
-    } catch {}
+  } catch {
+    return
+  }
+  try {
+    await granaryApi.delete(row.id)
     ElMessage.success('删除成功')
     loadList()
-  } catch {}
+  } catch {
+  }
 }
 
 onMounted(() => {

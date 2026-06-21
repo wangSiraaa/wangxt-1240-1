@@ -112,53 +112,12 @@ const stats = reactive({
 
 const GranaryStatusLabels = {} as any
 
-const mockGranaries: Granary[] = [
-  { id: 'g1', code: 'A-01', name: '一号仓', status: 'normal' } as any,
-  { id: 'g2', code: 'A-02', name: '二号仓', status: 'fumigating' } as any,
-  { id: 'g3', code: 'B-01', name: '三号仓', status: 'sealed' } as any,
-  { id: 'g4', code: 'B-02', name: '四号仓', status: 'normal' } as any,
-  { id: 'g5', code: 'C-01', name: '五号仓', status: 'ventilating' } as any
-]
-
 const loadGranaries = async () => {
   try {
     granaries.value = await granaryApi.list()
   } catch {
-    granaries.value = mockGranaries
+    granaries.value = []
   }
-}
-
-const generateMockReadings = () => {
-  const result: SensorReading[] = []
-  const sensors = [
-    { id: 's1', code: 'A01-T01', type: 'temperature', location_desc: '上层东北' },
-    { id: 's2', code: 'A01-T02', type: 'temperature', location_desc: '中层中心' },
-    { id: 's3', code: 'A01-T03', type: 'temperature', location_desc: '下层西南' },
-    { id: 's4', code: 'A01-T04', type: 'temperature', location_desc: '上层西北' },
-    { id: 's5', code: 'A01-H01', type: 'humidity', location_desc: '上层' }
-  ]
-  const now = dayjs()
-  for (let i = 48; i >= 0; i--) {
-    const time = now.subtract(i * 30, 'minute')
-    sensors.forEach((s, idx) => {
-      const baseValue = s.type === 'temperature'
-        ? 15 + Math.sin(i / 8 + idx) * 4 + Math.random() * 2
-        : 55 + Math.sin(i / 6 + idx) * 10 + Math.random() * 3
-      result.push({
-        id: result.length,
-        sensor_id: s.id,
-        granary_id: 'g1',
-        reading_time: time.format(),
-        value: Number(baseValue.toFixed(2)),
-        sensor_code: s.code,
-        sensor_type: s.type,
-        location_desc: s.location_desc,
-        unit: s.type === 'temperature' ? '°C' : '%RH',
-        is_abnormal: s.type === 'temperature' && baseValue > 25
-      })
-    })
-  }
-  return result
 }
 
 const reloadCharts = async () => {
@@ -172,7 +131,7 @@ const reloadCharts = async () => {
       })
     }
   } catch {
-    readings.value = generateMockReadings()
+    readings.value = []
   }
   updateStats()
 }
@@ -249,9 +208,17 @@ const trendOption = computed(() => {
 
 const compareOption = computed(() => {
   const names = granaries.value.map(g => `${g.code}`)
-  const avgTemps = granaries.value.map(() => Number((14 + Math.random() * 10).toFixed(1)))
-  const maxTemps = granaries.value.map(() => Number((20 + Math.random() * 8).toFixed(1)))
-  const minTemps = granaries.value.map(() => Number((10 + Math.random() * 6).toFixed(1)))
+  const tempReadings = readings.value.filter(r => r.sensor_type === 'temperature')
+  const statsByGranary = granaries.value.map(g => {
+    const gReadings = tempReadings.filter(r => r.granary_id === g.id || g.id === (selectedGranary.value || granaries.value[0]?.id))
+    if (gReadings.length === 0) return { avg: 0, max: 0, min: 0 }
+    const vals = gReadings.map(r => r.value)
+    return {
+      avg: Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)),
+      max: Number(Math.max(...vals).toFixed(1)),
+      min: Number(Math.min(...vals).toFixed(1))
+    }
+  })
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: ['最高温', '平均温', '最低温'], top: 0 },
@@ -259,9 +226,9 @@ const compareOption = computed(() => {
     xAxis: { type: 'category', data: names },
     yAxis: { type: 'value', name: '温度(°C)' },
     series: [
-      { name: '最高温', type: 'bar', data: maxTemps, itemStyle: { color: '#f56c6c' } },
-      { name: '平均温', type: 'bar', data: avgTemps, itemStyle: { color: '#409eff' } },
-      { name: '最低温', type: 'bar', data: minTemps, itemStyle: { color: '#67c23a' } }
+      { name: '最高温', type: 'bar', data: statsByGranary.map(s => s.max), itemStyle: { color: '#f56c6c' } },
+      { name: '平均温', type: 'bar', data: statsByGranary.map(s => s.avg), itemStyle: { color: '#409eff' } },
+      { name: '最低温', type: 'bar', data: statsByGranary.map(s => s.min), itemStyle: { color: '#67c23a' } }
     ]
   }
 })
@@ -270,10 +237,18 @@ const granaryHeatmapOption = computed(() => {
   const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`)
   const granaryNames = granaries.value.map(g => g.name)
   const data: any[] = []
+  const tempReadings = readings.value.filter(r => r.sensor_type === 'temperature')
   for (let y = 0; y < granaryNames.length; y++) {
     for (let x = 0; x < hours.length; x++) {
-      const base = 15 + Math.sin(x / 4 + y) * 5 + Math.random() * 3
-      data.push([x, y, Number(base.toFixed(1))])
+      const gId = granaries.value[y]?.id
+      const hourReadings = tempReadings.filter(r => {
+        if (r.granary_id !== gId && gId !== (selectedGranary.value || granaries.value[0]?.id)) return false
+        return new Date(r.reading_time).getHours() === x
+      })
+      const val = hourReadings.length > 0
+        ? Number((hourReadings.reduce((sum, r) => sum + r.value, 0) / hourReadings.length).toFixed(1))
+        : 0
+      data.push([x, y, val])
     }
   }
   return {
