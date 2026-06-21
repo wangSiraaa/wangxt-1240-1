@@ -150,6 +150,7 @@ func main() {
 				fumigation.POST("/plans/:id/clear-people", middleware.RoleMiddleware(models.RoleKeeper, models.RoleAdmin, models.RoleDutyOfficer), fumigationCtrl.MarkPeopleCleared)
 				fumigation.POST("/plans/:id/start", middleware.RoleMiddleware(models.RoleKeeper, models.RoleAdmin), fumigationCtrl.StartExecution)
 				fumigation.POST("/plans/:id/complete", middleware.RoleMiddleware(models.RoleKeeper, models.RoleAdmin), fumigationCtrl.CompleteExecution)
+				fumigation.POST("/plans/:id/safety-confirm", middleware.RoleMiddleware(models.RoleSafetyOfficer, models.RoleAdmin), fumigationCtrl.SafetyConfirm)
 				fumigation.GET("/executions", fumigationCtrl.ListExecutions)
 			}
 

@@ -145,6 +145,12 @@ type FumigationPlan struct {
 	Approver          *User            `gorm:"foreignKey:ApproverID" json:"approver,omitempty"`
 	ApprovalRemark    string           `gorm:"type:text" json:"approval_remark"`
 	ApprovedAt        *time.Time       `json:"approved_at"`
+	DetectionIntervalHours int         `gorm:"default:4" json:"detection_interval_hours"`
+	NextDetectionTime *time.Time       `json:"next_detection_time"`
+	SafetyConfirmed   bool             `gorm:"default:false" json:"safety_confirmed"`
+	SafetyConfirmedAt *time.Time       `json:"safety_confirmed_at"`
+	SafetyConfirmedBy *uuid.UUID       `gorm:"type:uuid" json:"safety_confirmed_by"`
+	SafetyConfirmRemark string         `gorm:"type:text" json:"safety_confirm_remark"`
 	CreatedAt         time.Time        `json:"created_at"`
 	UpdatedAt         time.Time        `json:"updated_at"`
 }

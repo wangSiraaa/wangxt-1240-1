@@ -139,6 +139,13 @@
           </template>
         </el-alert>
       </div>
+      <div v-if="completeUnsealRow?.unseal_type === 'unseal' && completeUnsealRow?.fumigation_plan_id" style="margin-bottom: 16px">
+        <el-alert :type="getSafetyConfirmStatus() ? 'success' : 'warning'" :closable="false" show-icon>
+          <template #title>
+            {{ getSafetyConfirmStatus() ? '安全员已确认达标，可以解封' : '安全员尚未确认气体检测达标，不能解封' }}
+          </template>
+        </el-alert>
+      </div>
       <el-form :model="completeForm" label-width="110px">
         <el-row :gutter="16">
           <el-col :span="12">
@@ -253,6 +260,8 @@ const createRules: FormRules = {
 const completeDialogVisible = ref(false)
 const completing = ref(false)
 const completeUnsealRow = ref<UnsealRecord>()
+const safetyConfirmed = ref(false)
+const loadingSafetyConfirm = ref(false)
 const completeForm = reactive({
   end_time: dayjs().format('YYYY-MM-DDTHH:mm:ss'),
   is_safe: false, final_gas_readings: '', remark: ''
@@ -282,6 +291,22 @@ const safeStatusLabel = computed(() => {
 })
 
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'
+
+const getSafetyConfirmStatus = () => {
+  return safetyConfirmed.value
+}
+
+const checkSafetyConfirm = async (planId: string) => {
+  loadingSafetyConfirm.value = true
+  try {
+    const plan = await fumigationApi.getPlan(planId)
+    safetyConfirmed.value = plan.safety_confirmed
+  } catch {
+    safetyConfirmed.value = false
+  } finally {
+    loadingSafetyConfirm.value = false
+  }
+}
 
 const loadList = async () => {
   loading.value = true
@@ -348,17 +373,25 @@ const handleCreate = async () => {
   }
 }
 
-const openCompleteDialog = (row: UnsealRecord) => {
+const openCompleteDialog = async (row: UnsealRecord) => {
   completeUnsealRow.value = row
+  safetyConfirmed.value = false
   Object.assign(completeForm, {
     end_time: dayjs().format('YYYY-MM-DDTHH:mm:ss'),
     is_safe: false, final_gas_readings: '', remark: ''
   })
+  if (row.unseal_type === 'unseal' && row.fumigation_plan_id) {
+    await checkSafetyConfirm(row.fumigation_plan_id)
+  }
   completeDialogVisible.value = true
 }
 
 const handleComplete = async () => {
   if (!completeUnsealRow.value) return
+  if (completeUnsealRow.value.unseal_type === 'unseal' && completeUnsealRow.value.fumigation_plan_id && !safetyConfirmed.value) {
+    ElMessage.error('安全员尚未确认气体检测达标，不能解封')
+    return
+  }
   completing.value = true
   try {
     await unsealApi.complete(completeUnsealRow.value.id, completeForm)

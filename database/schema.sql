@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS fumigation_plans (
     approver_id UUID REFERENCES users(id),
     approval_remark TEXT,
     approved_at TIMESTAMPTZ,
+    detection_interval_hours INTEGER DEFAULT 4,
+    next_detection_time TIMESTAMPTZ,
+    safety_confirmed BOOLEAN DEFAULT false,
+    safety_confirmed_at TIMESTAMPTZ,
+    safety_confirmed_by UUID REFERENCES users(id),
+    safety_confirm_remark TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

@@ -60,6 +60,8 @@ export const fumigationApi = {
     request.post<any, { plan: FumigationPlan; execution: FumigationExecution }>(`/fumigation/plans/${id}/start`),
   completeExecution: (id: string, data: any) =>
     request.post<any, FumigationPlan>(`/fumigation/plans/${id}/complete`, data),
+  safetyConfirm: (id: string, data: { confirmed: boolean; remark?: string }) =>
+    request.post<any, FumigationPlan>(`/fumigation/plans/${id}/safety-confirm`, data),
   listExecutions: (params?: { plan_id?: string; granary_id?: string }) =>
     request.get<any, FumigationExecution[]>('/fumigation/executions', { params })
 }

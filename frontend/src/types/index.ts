@@ -106,6 +106,12 @@ export interface FumigationPlan {
   approver?: User
   approval_remark?: string
   approved_at?: string
+  detection_interval_hours?: number
+  next_detection_time?: string
+  safety_confirmed: boolean
+  safety_confirmed_at?: string
+  safety_confirmed_by?: string
+  safety_confirm_remark?: string
   created_at: string
   updated_at: string
 }

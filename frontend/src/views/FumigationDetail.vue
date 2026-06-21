@@ -22,11 +22,20 @@
             <el-descriptions-item label="计划开始">{{ formatTime(detail.plan_start_time) }}</el-descriptions-item>
             <el-descriptions-item label="计划结束">{{ formatTime(detail.plan_end_time) }}</el-descriptions-item>
             <el-descriptions-item label="预期密封">{{ detail.expected_seal_hours || '-' }} 小时</el-descriptions-item>
+            <el-descriptions-item label="检测间隔">{{ detail.detection_interval_hours || 4 }} 小时</el-descriptions-item>
             <el-descriptions-item label="创建人">{{ detail.creator?.full_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="审批人">{{ detail.approver?.full_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="审批时间">{{ formatTime(detail.approved_at) }}</el-descriptions-item>
+            <el-descriptions-item label="下次检测">{{ formatTime(detail.next_detection_time) }}</el-descriptions-item>
+            <el-descriptions-item label="安全员确认">
+              <el-tag v-if="detail.safety_confirmed" type="success">已确认</el-tag>
+              <el-tag v-else type="warning">待确认</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="确认人">{{ detail.safety_confirmed_by ? (getConfirmerName()) : '-' }}</el-descriptions-item>
+            <el-descriptions-item label="确认时间">{{ formatTime(detail.safety_confirmed_at) }}</el-descriptions-item>
             <el-descriptions-item label="熏蒸原因" :span="2">{{ detail.reason || '-' }}</el-descriptions-item>
             <el-descriptions-item label="审批意见" :span="2">{{ detail.approval_remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="确认备注" :span="2">{{ detail.safety_confirm_remark || '-' }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -47,18 +56,61 @@
             <el-step title="确认清场" :description="detail?.people_cleared ? (detail.people_cleared_time ? formatTime(detail.people_cleared_time) : '已确认') : '未清场'" />
             <el-step title="投药执行" :description="detail?.status === 'in_progress' || detail?.status === 'completed' ? '已开始' : '未开始'" />
             <el-step title="完成熏蒸" :description="detail?.status === 'completed' ? '已完成' : '未完成'" />
-            <el-step title="通风解封" :description="canUnseal ? '可进行通风解封' : '等待完成熏蒸'" />
+            <el-step title="通风复测" :description="ventilationStatus" />
+            <el-step title="安全员确认" :description="safetyConfirmStatus" />
+            <el-step title="解封" :description="canUnseal ? '可进行解封' : '等待安全员确认'" />
           </el-steps>
 
-          <div style="margin-top: 20px" v-if="detail?.status === 'completed'">
+          <div style="margin-top: 20px" v-if="detail?.status === 'completed' && detail?.next_detection_time && isDetectionOverdue">
             <el-alert
-              title="熏蒸已完成，请按规程进行通风，气体浓度检测达标后方可解封"
+              :title="`已超过下次检测时间（${formatTime(detail.next_detection_time)}），请立即进行气体检测！`"
+              type="error"
+              :closable="false"
+              show-icon
+            />
+          </div>
+
+          <div style="margin-top: 20px" v-else-if="detail?.status === 'completed' && detail?.next_detection_time && !detail.safety_confirmed">
+            <el-alert
+              :title="`下次气体检测时间：${formatTime(detail.next_detection_time)}，请按时检测并由安全员确认达标`"
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <el-button type="primary" link @click="goUnseal">去通风检测</el-button>
+              </template>
+            </el-alert>
+          </div>
+
+          <div style="margin-top: 20px" v-else-if="detail?.status === 'completed' && !detail?.next_detection_time">
+            <el-alert
+              title="熏蒸已完成，请先登记通风，系统将自动提示下次气体检测时间"
               type="success"
               :closable="false"
               show-icon
             >
               <template #default>
-                <el-button type="primary" link @click="goUnseal">立即去通风解封</el-button>
+                <el-button type="primary" link @click="goUnseal">立即登记通风</el-button>
+              </template>
+            </el-alert>
+          </div>
+
+          <div style="margin-top: 20px" v-if="detail?.status === 'completed' && !detail?.safety_confirmed && userStore.hasRole('safety_officer', 'admin')">
+            <el-button type="success" :icon="Check" @click="openSafetyConfirmDialog" style="width: 100%">
+              安全员确认达标
+            </el-button>
+          </div>
+
+          <div style="margin-top: 20px" v-if="detail?.status === 'completed' && detail?.safety_confirmed">
+            <el-alert
+              title="安全员已确认气体检测达标，可以进行解封"
+              type="success"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <el-button type="primary" link @click="goUnseal">去解封</el-button>
               </template>
             </el-alert>
           </div>
@@ -84,12 +136,33 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog v-model="safetyConfirmDialogVisible" title="安全员确认达标" width="500px" destroy-on-close>
+      <el-form :model="safetyConfirmForm" label-width="100px">
+        <el-form-item label="是否达标">
+          <el-radio-group v-model="safetyConfirmForm.confirmed">
+            <el-radio :value="true">达标，确认</el-radio>
+            <el-radio :value="false">不达标，需继续通风</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="safetyConfirmForm.remark" type="textarea" :rows="3" placeholder="请输入确认备注（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="safetyConfirmDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="safetyConfirming" @click="handleSafetyConfirm">确认</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Check } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import type { FumigationPlan, FumigationExecution } from '@/types'
 import { FumigationStatusLabels, FumigationStatusColors } from '@/types'
 import { fumigationApi } from '@/api'
@@ -97,10 +170,18 @@ import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const planId = computed(() => route.params.id as string)
 
 const detail = ref<FumigationPlan>()
 const executions = ref<FumigationExecution[]>([])
+
+const safetyConfirmDialogVisible = ref(false)
+const safetyConfirming = ref(false)
+const safetyConfirmForm = reactive({
+  confirmed: true,
+  remark: ''
+})
 
 const stepIndex = computed(() => {
   if (!detail.value) return 0
@@ -111,14 +192,46 @@ const stepIndex = computed(() => {
   if (s === 'approved' && !detail.value.people_cleared) return 3
   if (s === 'approved' && detail.value.people_cleared) return 4
   if (s === 'in_progress') return 5
-  if (s === 'completed') return 6
+  if (s === 'completed') {
+    if (detail.value.next_detection_time) {
+      if (detail.value.safety_confirmed) {
+        return 9
+      }
+      return 7
+    }
+    return 6
+  }
   return 0
 })
 
+const ventilationStatus = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.status !== 'completed') return '等待完成熏蒸'
+  if (detail.value.next_detection_time) return `已通风，下次检测：${formatTime(detail.value.next_detection_time)}`
+  return '待登记通风'
+})
+
+const safetyConfirmStatus = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.status !== 'completed') return '等待完成熏蒸'
+  if (!detail.value.next_detection_time) return '待通风登记'
+  if (detail.value.safety_confirmed) return `已确认 (${formatTime(detail.value.safety_confirmed_at)})`
+  return '待安全员确认'
+})
+
+const isDetectionOverdue = computed(() => {
+  if (!detail.value?.next_detection_time) return false
+  return dayjs().isAfter(dayjs(detail.value.next_detection_time))
+})
+
 const canSubmit = computed(() => detail.value?.status === 'draft' || detail.value?.status === 'rejected')
-const canUnseal = computed(() => detail.value?.status === 'completed')
+const canUnseal = computed(() => detail.value?.status === 'completed' && detail.value?.safety_confirmed)
 
 const formatTime = (t?: string) => t ? dayjs(t).format('YYYY-MM-DD HH:mm') : '-'
+
+const getConfirmerName = () => {
+  return detail.value?.safety_confirmed_by || '-'
+}
 
 const loadDetail = async () => {
   try {
@@ -137,6 +250,25 @@ const loadExecutions = async () => {
 
 const goUnseal = () => {
   router.push('/unseal')
+}
+
+const openSafetyConfirmDialog = () => {
+  safetyConfirmForm.confirmed = true
+  safetyConfirmForm.remark = ''
+  safetyConfirmDialogVisible.value = true
+}
+
+const handleSafetyConfirm = async () => {
+  safetyConfirming.value = true
+  try {
+    await fumigationApi.safetyConfirm(planId.value, safetyConfirmForm)
+    ElMessage.success(safetyConfirmForm.confirmed ? '已确认达标' : '已标记为不达标')
+    safetyConfirmDialogVisible.value = false
+    loadDetail()
+  } catch {
+  } finally {
+    safetyConfirming.value = false
+  }
 }
 
 onMounted(() => {

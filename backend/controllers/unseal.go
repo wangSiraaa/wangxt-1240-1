@@ -52,6 +52,12 @@ func (uc *UnsealController) Create(c *gin.Context) {
 			startTime = &t
 		}
 	}
+	if startTime == nil {
+		now := time.Now()
+		startTime = &now
+	}
+
+	tx := database.DB.Begin()
 
 	record := models.UnsealRecord{
 		ID:               uuid.New(),
@@ -68,17 +74,42 @@ func (uc *UnsealController) Create(c *gin.Context) {
 		record.FumigationPlanID = &pid
 	}
 
-	if err := database.DB.Create(&record).Error; err != nil {
+	if err := tx.Create(&record).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if req.UnsealType == models.UnsealTypeVentilation {
-		database.DB.Model(&models.Granary{}).
+		if err := tx.Model(&models.Granary{}).
 			Where("id = ?", req.GranaryID).
-			Update("status", models.GranaryVentilating)
+			Update("status", models.GranaryVentilating).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if req.FumigationPlanID != "" {
+			var plan models.FumigationPlan
+			if err := tx.First(&plan, "id = ?", req.FumigationPlanID).Error; err == nil {
+				interval := plan.DetectionIntervalHours
+				if interval <= 0 {
+					interval = 4
+				}
+				nextTime := startTime.Add(time.Duration(interval) * time.Hour)
+				if err := tx.Model(&plan).Updates(map[string]interface{}{
+					"next_detection_time": nextTime,
+					"safety_confirmed":    false,
+				}).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+			}
+		}
 	}
 
+	tx.Commit()
 	c.JSON(http.StatusCreated, record)
 }
 
@@ -215,6 +246,21 @@ func (uc *UnsealController) CompleteUnseal(c *gin.Context) {
 		tx.Rollback()
 		c.JSON(http.StatusNotFound, gin.H{"error": "解封记录不存在"})
 		return
+	}
+
+	// 关键业务规则：安全员未确认达标不能解封
+	if record.UnsealType == models.UnsealTypeUnseal && record.FumigationPlanID != nil {
+		var plan models.FumigationPlan
+		if err := tx.First(&plan, "id = ?", *record.FumigationPlanID).Error; err == nil {
+			if !plan.SafetyConfirmed {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":      "安全员尚未确认气体检测达标，不能解封",
+					"error_code": "SAFETY_NOT_CONFIRMED",
+				})
+				return
+			}
+		}
 	}
 
 	// 关键业务规则：气体浓度未达安全值不能解封

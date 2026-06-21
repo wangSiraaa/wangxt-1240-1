@@ -396,6 +396,54 @@ func (fc *FumigationController) ListExecutions(c *gin.Context) {
 	c.JSON(http.StatusOK, executions)
 }
 
+type SafetyConfirmRequest struct {
+	Confirmed bool   `json:"confirmed" binding:"required"`
+	Remark    string `json:"remark"`
+}
+
+func (fc *FumigationController) SafetyConfirm(c *gin.Context) {
+	id := c.Param("id")
+	var req SafetyConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := middleware.GetCurrentUserID(c)
+	confirmerID := uuid.MustParse(userID)
+	now := time.Now()
+
+	var plan models.FumigationPlan
+	if err := database.DB.First(&plan, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "熏蒸方案不存在"})
+		return
+	}
+
+	if plan.Status != models.FumigationCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "只有已完成的熏蒸方案才能进行达标确认"})
+		return
+	}
+
+	if req.Confirmed {
+		plan.SafetyConfirmed = true
+		plan.SafetyConfirmedAt = &now
+		plan.SafetyConfirmedBy = &confirmerID
+		plan.SafetyConfirmRemark = req.Remark
+	} else {
+		plan.SafetyConfirmed = false
+		plan.SafetyConfirmedAt = nil
+		plan.SafetyConfirmedBy = nil
+		plan.SafetyConfirmRemark = req.Remark
+	}
+
+	if err := database.DB.Save(&plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, plan)
+}
+
 func CheckFumigationRules(plan *models.FumigationPlan) error {
 	if plan == nil {
 		return errors.New("熏蒸方案不存在")
